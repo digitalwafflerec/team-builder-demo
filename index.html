@@ -635,13 +635,6 @@ footer.site{
       <label>Location</label>
       <div class="csel" id="editRegion"></div>
     </div>
-    <div class="field">
-      <label>Type</label>
-      <div class="pills" id="typePills">
-        <button class="pill" data-v="perm">Permanent</button>
-        <button class="pill" data-v="contract">Contractor</button>
-      </div>
-    </div>
     <div class="field" id="statusField">
       <label>Status</label>
       <div class="pills" id="statusPills">
@@ -649,20 +642,39 @@ footer.site{
         <button class="pill" data-v="planned">Planned hire</button>
       </div>
     </div>
-    <div class="field" id="qField">
-      <label id="qLabel">Target quarter</label>
-      <div class="csel" id="editQuarter"></div>
+    <div class="field">
+      <label>Type</label>
+      <div class="pills" id="typePills">
+        <button class="pill" data-v="perm">Permanent</button>
+        <button class="pill" data-v="contract">Contractor</button>
+      </div>
     </div>
+    <!-- right-of-type slot: one of salary / target quarter / contractor start -->
     <div class="field" id="salField">
       <label for="salInput">Current salary</label>
       <input class="tin num" id="salInput" type="text" inputmode="numeric" placeholder="e.g. 48,000">
       <div class="helper">What this person is paid today</div>
     </div>
+    <div class="field" id="qField">
+      <label id="qLabel">Target quarter</label>
+      <div class="csel" id="editQuarter"></div>
+    </div>
+    <div class="field" id="startMonthField">
+      <label id="startMonthLabel">Start date</label>
+      <div class="csel" id="editStartMonth"></div>
+    </div>
+    <!-- row 3 left: budget / duration -->
     <div class="field" id="budField">
       <label for="budInput">Budget for this hire <span style="color:var(--text-3);font-weight:500">(optional)</span></label>
       <input class="tin num" id="budInput" type="text" inputmode="numeric" placeholder="e.g. 55,000">
       <div class="helper">We'll check it against the market</div>
     </div>
+    <div class="field" id="durField">
+      <label for="monthsInput" id="durLabel">Project length (months)</label>
+      <input class="tin num" id="monthsInput" type="text" inputmode="numeric" placeholder="e.g. 3">
+      <div class="helper" id="durHelp">Cost drops off after this</div>
+    </div>
+    <!-- row 3 right: fee / day rate -->
     <div class="field" id="feeField">
       <label for="feeInput">Recruitment fee %</label>
       <input class="tin num" id="feeInput" type="text" inputmode="numeric" placeholder="20">
@@ -672,11 +684,6 @@ footer.site{
       <label for="rateInput">Day rate</label>
       <input class="tin num" id="rateInput" type="text" inputmode="numeric" placeholder="e.g. 450">
       <div class="helper">What they invoice per day</div>
-    </div>
-    <div class="field" id="monthsField">
-      <label for="monthsInput">Project length (months)</label>
-      <input class="tin num" id="monthsInput" type="text" inputmode="numeric" placeholder="e.g. 3">
-      <div class="helper">Cost drops off after this</div>
     </div>
   </div>
 
@@ -889,19 +896,38 @@ function safeNum(v){v=Number(v);return (isFinite(v)&&v>0)?v:0} /* never let a ba
 function ni(s){s=safeNum(s);return Math.max(0,s-NI_THRESH)*NI_RATE}
 function pen(s){s=safeNum(s);return Math.max(0,Math.min(s,PEN_HIGH)-PEN_LOW)*PEN_RATE}
 function trueCost(s){s=safeNum(s);return s+ni(s)+pen(s)}
+/* ---- month <-> quarter conversion (contractors plan by month, roadmap buckets by quarter) ---- */
+var MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function nowMonthIndex(){var d=new Date();return d.getFullYear()*12+d.getMonth()}
+function ymToIndex(ym){var m=/^(\d{4})-(\d{1,2})$/.exec(ym||'');return m?(parseInt(m[1],10)*12+(parseInt(m[2],10)-1)):null}
+function indexToYM(idx){return Math.floor(idx/12)+'-'+String((idx%12)+1).padStart(2,'0')}
+function monthLabel(ym){var i=ymToIndex(ym);return i==null?'':MONTH_NAMES[i%12]+' '+Math.floor(i/12)}
+/* start dropdown: 6 months back to 18 ahead, so in-post contracts can show a past start */
+function buildMonths(){var out=[],base=nowMonthIndex()-6;for(var i=0;i<24;i++){var ym=indexToYM(base+i);out.push({id:ym,n:monthLabel(ym)})}return out}
+var MONTHS=buildMonths();
+function monthName(id){var m=MONTHS.filter(function(x){return x.id===id})[0];return m?m.n:''}
+
 /* contractor economics: day rate only, no employer NI or pension */
 function isContract(n){return n&&n.etype==='contract'}
 function contractMonths(n){var m=Math.round(safeNum(n.months));return m>0?m:0}
 function contractMonthly(n){return safeNum(n.rate)*CONTRACT_DAYS_PM}
 function contractTotal(n){return contractMonthly(n)*contractMonths(n)}
+/* active month window: in-post contracts count their REMAINING months from now;
+   planned contracts count their project length from the chosen start month */
+function contractWindow(n){
+  var len=contractMonths(n);if(len<=0)return null;
+  var start=(n.status==='existing')?nowMonthIndex():ymToIndex(n.startMonth);
+  if(start==null)return null;
+  return {start:start,end:start+len-1};
+}
 /* month index of a quarter's first month, e.g. 2026q3 -> 2026*12+6 */
 function qMonthIndex(id){var m=/^(\d{4})q([1-4])$/.exec(id||'');return m?(parseInt(m[1],10)*12+(parseInt(m[2],10)-1)*3):null}
 /* months of a contract that fall inside quarter q (0 if outside / dropped off) */
 function contractMonthsInQuarter(n,qid){
-  var start=qMonthIndex(n.q),qs=qMonthIndex(qid),len=contractMonths(n);
-  if(start==null||qs==null||len<=0)return 0;
-  var end=start+len-1, qe=qs+2;
-  return Math.max(0,Math.min(end,qe)-Math.max(start,qs)+1);
+  var w=contractWindow(n),qs=qMonthIndex(qid);
+  if(!w||qs==null)return 0;
+  var qe=qs+2;
+  return Math.max(0,Math.min(w.end,qe)-Math.max(w.start,qs)+1);
 }
 
 var GBP=new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0});
@@ -947,7 +973,7 @@ function exampleState(){
     if(status==='existing'){
       o.sal=Math.round((marketAvg(idx,reg)||50000)*(opts.salMult||1)/250)*250;
     }
-    if(status==='contract'){o.rate=opts.rate||450;o.months=opts.months||3}
+    if(status==='contract'){o.rate=opts.rate||450;o.months=opts.months||3;o.startMonth=opts.startMonth||indexToYM(nowMonthIndex())}
     if(opts.q)o.q=opts.q;
     return o;
   }
@@ -959,7 +985,7 @@ function exampleState(){
   ];
   var mkt=mk(/^Digital Marketing Manager$/i,'Midlands','existing',{salMult:.78});
   var da=mk(/^Data Analyst$/i,'Midlands','planned',{q:QUARTERS[1].id});
-  var con=mk(/^UX Designer$|Designer/i,'Remote (UK)','contract',{rate:500,months:3,q:QUARTERS[0].id});
+  var con=mk(/^UX Designer$|Designer/i,'Remote (UK)','contract',{rate:500,months:3,startMonth:indexToYM(nowMonthIndex())});
   return {company:'',defReg:'Nationwide (UK)',nodes:[cto,mkt,da,con]};
 }
 function save(){try{localStorage.setItem(STORE,JSON.stringify({state:state,uid:uid}))}catch(e){}}
@@ -981,6 +1007,12 @@ function sanitiseNodes(arr){
     if(n.etype==='contract'){
       n.rate=safeNum(n.rate);
       n.months=contractMonths(n)||3;
+      if(n.status!=='existing'&&n.status!=='planned')n.status='planned';
+      /* migrate older contractors tagged by quarter to a month start */
+      if((!n.startMonth||ymToIndex(n.startMonth)==null)){
+        var qi=qMonthIndex(n.q);
+        n.startMonth=(qi!=null)?indexToYM(qi):indexToYM(nowMonthIndex());
+      }
     }else{
       n.etype='perm';
       if(n.status!=='existing'&&n.status!=='planned')n.status='planned';
@@ -1184,10 +1216,13 @@ function nodeCard(n){
   var m=marketFor(n.role,n.reg)||{min:0,avg:0,max:0}; /* never let a missing benchmark blank the chart */
   var salHtml,chips='';
   if(isContract(n)){
-    var mo=contractMonths(n);
-    chips+='<span class="chip planned">Contract'+(n.q&&qName(n.q)?(' · '+qName(n.q)):'')+'</span>';
-    chips+='<span class="chip demand">'+mo+(mo===1?' month':' months')+'</span>';
-    salHtml='<div class="sal num">'+fm(safeNum(n.rate))+'/day</div><div class="range num">'+fm(contractTotal(n))+' over the contract</div>';
+    var mo=contractMonths(n), inPost=n.status==='existing';
+    var when=inPost
+      ?(n.startMonth?('started '+monthName(n.startMonth)):'in post')
+      :(n.startMonth?('from '+monthName(n.startMonth)):'');
+    chips+='<span class="chip planned">Contract'+(when?(' · '+when):'')+'</span>';
+    chips+='<span class="chip demand">'+mo+(mo===1?' month':' months')+(inPost?' left':'')+'</span>';
+    salHtml='<div class="sal num">'+fm(safeNum(n.rate))+'/day</div><div class="range num">'+fm(contractTotal(n))+(inPost?' remaining':' over the contract')+'</div>';
   }else if(n.status==='planned'){
     chips+='<span class="chip planned">Planned'+(n.q&&qName(n.q)?(' · '+qName(n.q)):'')+'</span>';
     chips+=isHighDemand(r)
@@ -1489,7 +1524,7 @@ var gateDrawer=document.getElementById('gateDrawer');
 var editing=null;       /* node id being edited */
 var isNew=false;
 var draft=null;         /* working copy */
-var regionSel=null,quarterSel=null,defRegSel=null,intentSel=null;
+var regionSel=null,quarterSel=null,startMonthSel=null,defRegSel=null,intentSel=null;
 var intentVal='now';
 
 var lastFocus=null,skipDirty=false;
@@ -1506,12 +1541,12 @@ function draftDirty(){
   if(isNew)return draft.role!=null;
   var curType=(n.etype==='contract')?'contract':'perm';
   if(n.role!==draft.role||n.reg!==draft.reg||curType!==draft.etype)return true;
+  if(n.status!==draft.status)return true;
   if(draft.etype==='contract'){
     return (n.rate||null)!==(draft.rate||null)
       ||(n.months||3)!==(draft.months||3)
-      ||(n.q||null)!==(draft.q||null);
+      ||(n.startMonth||null)!==(draft.startMonth||null);
   }
-  if(n.status!==draft.status)return true;
   if(draft.status==='existing')return (n.sal||null)!==(draft.sal||null);
   return (n.q||null)!==(draft.q||null)
     ||(n.bud||null)!==(draft.bud||null)
@@ -1576,7 +1611,7 @@ function openEditor(id,isNewRole){
   var n=findNode(id);
   draft={role:n.role,reg:n.reg,etype:(n.etype==='contract'?'contract':'perm'),status:n.status||'planned',
     sal:n.sal||null,q:n.q||null,bud:n.bud||null,fee:(n.fee==null?20:n.fee),
-    rate:n.rate||null,months:n.months||3};
+    rate:n.rate||null,months:n.months||3,startMonth:n.startMonth||null};
   document.getElementById('editTitle').textContent=isNewRole?'Add a role.':'Edit role.';
   document.getElementById('roleInput').value=draft.role!=null?ROLES[draft.role].t:'';
   document.getElementById('salInput').value=draft.sal?draft.sal.toLocaleString('en-GB'):'';
@@ -1585,44 +1620,46 @@ function openEditor(id,isNewRole){
   document.getElementById('rateInput').value=draft.rate?draft.rate.toLocaleString('en-GB'):'';
   document.getElementById('monthsInput').value=draft.months||'';
   document.getElementById('removeBtn').style.display=isNewRole?'none':'';
-  if(!draft.q||!qName(draft.q))draft.q=QUARTERS[0].id; /* stale or missing tags roll to the current quarter */
+  if(!draft.q||!qName(draft.q))draft.q=QUARTERS[0].id; /* stale perm quarter rolls forward */
+  if(!draft.startMonth||ymToIndex(draft.startMonth)==null)draft.startMonth=indexToYM(nowMonthIndex());
   regionSel.set(draft.reg);
   quarterSel.set(draft.q);
+  startMonthSel.set(draft.startMonth);
   syncType();syncMarket();
   openDrawer(editDrawer);
 }
+/* status applies to both permanent and contractor; type + status together decide which fields show */
 function syncType(){
-  var con=draft.etype==='contract';
   document.querySelectorAll('#typePills .pill').forEach(function(p){
     var on=p.getAttribute('data-v')===draft.etype;
     p.classList.toggle('on',on);p.setAttribute('aria-pressed',on?'true':'false');
   });
-  /* contract uses the quarter field as a start date */
-  document.getElementById('qLabel').textContent=con?'Starts':'Target quarter';
-  document.getElementById('statusField').style.display=con?'none':'';
-  document.getElementById('rateField').style.display=con?'':'none';
-  document.getElementById('monthsField').style.display=con?'':'none';
+  var con=draft.etype==='contract';
   document.querySelector('#marketBox .permRows').style.display=con?'none':'';
   document.querySelector('#marketBox .conRows').style.display=con?'':'none';
-  if(con){
-    document.getElementById('qField').style.display='';
-    document.getElementById('salField').style.display='none';
-    document.getElementById('budField').style.display='none';
-    document.getElementById('feeField').style.display='none';
-  }else{
-    syncStatus();
-  }
+  syncStatus();
 }
 function syncStatus(){
   document.querySelectorAll('#statusPills .pill').forEach(function(p){
     var on=p.getAttribute('data-v')===draft.status;
-    p.classList.toggle('on',on);
-    p.setAttribute('aria-pressed',on?'true':'false');
+    p.classList.toggle('on',on);p.setAttribute('aria-pressed',on?'true':'false');
   });
-  document.getElementById('salField').style.display=draft.status==='existing'?'':'none';
-  document.getElementById('qField').style.display=draft.status==='planned'?'':'none';
-  document.getElementById('budField').style.display=draft.status==='planned'?'':'none';
-  document.getElementById('feeField').style.display=draft.status==='planned'?'':'none';
+  var con=draft.etype==='contract';
+  var planned=draft.status==='planned',existing=draft.status==='existing';
+  /* permanent fields */
+  document.getElementById('salField').style.display=(!con&&existing)?'':'none';
+  document.getElementById('qField').style.display=(!con&&planned)?'':'none';
+  document.getElementById('budField').style.display=(!con&&planned)?'':'none';
+  document.getElementById('feeField').style.display=(!con&&planned)?'':'none';
+  /* contractor fields */
+  document.getElementById('startMonthField').style.display=con?'':'none';
+  document.getElementById('durField').style.display=con?'':'none';
+  document.getElementById('rateField').style.display=con?'':'none';
+  if(con){
+    document.getElementById('startMonthLabel').textContent=existing?'Started':'Start date';
+    document.getElementById('durLabel').textContent=existing?'Remaining duration (months)':'Project length (months)';
+    document.getElementById('durHelp').textContent=existing?'Months left to run':'Cost drops off after this';
+  }
 }
 document.querySelectorAll('#typePills .pill').forEach(function(p){
   p.addEventListener('click',function(){draft.etype=p.getAttribute('data-v');syncType();syncMarket()});
@@ -1657,10 +1694,13 @@ function syncMarket(){
   var v=document.getElementById('mVerdict');
 
   if(draft.etype==='contract'){
+    var inPost=draft.status==='existing';
     var months=(draft.months&&draft.months>0)?draft.months:0;
     var monthly=safeNum(draft.rate)*CONTRACT_DAYS_PM;
     document.getElementById('cMonthly').textContent=draft.rate?fm(monthly):'–';
+    document.querySelector('#marketBox .conRows .row:nth-child(2) span').textContent=inPost?'Remaining':'Project length';
     document.getElementById('cLen').textContent=months?(months+(months===1?' month':' months')):'–';
+    document.querySelector('#marketBox .conRows .row:nth-child(3) span').textContent=inPost?'Remaining cost':'Total project cost';
     document.getElementById('cTotal').textContent=(draft.rate&&months)?fm(monthly*months):'–';
     document.getElementById('cBench').textContent=fm(m.avg)+' / yr';
     if(draft.rate){
@@ -1768,18 +1808,18 @@ document.getElementById('saveBtn').addEventListener('click',function(){
   var n=findNode(editing);
   n.role=draft.role;n.reg=draft.reg;n.etype=draft.etype;
   if(draft.etype==='contract'){
-    n.status=null;
+    n.status=draft.status; /* contractors can be in post or planned too */
     n.rate=draft.rate||0;
     n.months=(draft.months&&draft.months>0)?draft.months:3;
-    n.q=draft.q;
-    n.sal=null;n.bud=null;n.fee=null;
+    n.startMonth=draft.startMonth||indexToYM(nowMonthIndex());
+    n.q=null;n.sal=null;n.bud=null;n.fee=null;
   }else{
     n.status=draft.status;
     n.sal=draft.status==='existing'?(draft.sal||marketAvg(draft.role,draft.reg)):null;
     n.q=draft.status==='planned'?draft.q:null;
     n.bud=draft.status==='planned'?draft.bud:null;
     n.fee=draft.status==='planned'?((draft.fee==null)?20:draft.fee):null;
-    n.rate=null;n.months=null;
+    n.rate=null;n.months=null;n.startMonth=null;
   }
   var wasNew=isNew;
   if(wasNew)lastAdded=editing;
@@ -1912,10 +1952,11 @@ function buildPrintSummary(){
   walk(state.nodes,function(n){flat.push(n)});
   flat.forEach(function(n){
     if(isContract(n)){
-      conCount++;var tot=contractTotal(n),mo=contractMonths(n);conSpend+=tot;
+      conCount++;var tot=contractTotal(n),mo=contractMonths(n),inPost=n.status==='existing';conSpend+=tot;
+      var whenCol=inPost?(n.startMonth?('Since '+monthName(n.startMonth)):'In post'):(n.startMonth?monthName(n.startMonth):'–');
       conRows+='<tr><td>'+ROLES[n.role].t+'</td><td>'+regionOf(n.reg).n+'</td>'
-        +'<td>'+(n.q&&qName(n.q)?qName(n.q):'–')+'</td><td>'+fm(safeNum(n.rate))+'/day</td>'
-        +'<td>'+mo+(mo===1?' month':' months')+'</td><td><b>'+fm(tot)+'</b></td></tr>';
+        +'<td>'+whenCol+'</td><td>'+fm(safeNum(n.rate))+'/day</td>'
+        +'<td>'+mo+(mo===1?' month':' months')+(inPost?' left':'')+'</td><td><b>'+fm(tot)+'</b></td></tr>';
       return;
     }
     permCount++;
@@ -1933,7 +1974,7 @@ function buildPrintSummary(){
   var co=document.getElementById('gCompany').value||state.company;
   var contractTable=conCount?(
     '<h2 style="font-size:15px;margin-top:22px">Contractors</h2>'
-    +'<table><thead><tr><th>Role</th><th>Location</th><th>Starts</th><th>Day rate</th><th>Length</th><th>Project cost</th></tr></thead>'
+    +'<table><thead><tr><th>Role</th><th>Location</th><th>When</th><th>Day rate</th><th>Length</th><th>Project cost</th></tr></thead>'
     +'<tbody>'+conRows
     +'<tr class="total"><td>Total</td><td></td><td>'+conCount+(conCount===1?' contractor':' contractors')+'</td><td></td><td></td><td>'+fm(conSpend)+'</td></tr>'
     +'</tbody></table>'
@@ -1958,6 +1999,7 @@ function init(){
   );
   regionSel=mkSelect(document.getElementById('editRegion'),REGIONS,'Nationwide (UK)',function(v){draft.reg=v;syncMarket()});
   quarterSel=mkSelect(document.getElementById('editQuarter'),QUARTERS,QUARTERS[0].id,function(v){draft.q=v});
+  startMonthSel=mkSelect(document.getElementById('editStartMonth'),MONTHS,indexToYM(nowMonthIndex()),function(v){draft.startMonth=v;syncMarket()});
   intentSel=mkSelect(document.getElementById('gIntent'),INTENTS,'now',function(v){intentVal=v});
   if(state.company==='Your company')state.company=''; /* migrate old default to faded placeholder */
   document.getElementById('companyname').value=state.company;
