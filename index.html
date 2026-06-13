@@ -146,7 +146,7 @@ h1 .hl{
 /* HUD: stats embedded in the chart */
 .hud{
   position:absolute;top:14px;bottom:14px;right:14px;width:212px;
-  display:flex;flex-direction:column;gap:10px;z-index:5;
+  display:flex;flex-direction:column;gap:6px;z-index:5;
   pointer-events:none;
 }
 .hud .stat,.hud .btn{pointer-events:auto}
@@ -154,7 +154,7 @@ h1 .hl{
 .hud-gap.mid{flex:2.6}
 .hud-gap.end{flex:.45}
 .hud .stat{
-  padding:10px 13px;border-radius:11px;
+  padding:7px 12px;border-radius:10px;
   background:rgba(27,27,27,.93);
   animation:hudIn .4s var(--ease-out) backwards;
 }
@@ -165,9 +165,9 @@ h1 .hl{
 .hud .stat:nth-child(6){animation-delay:.25s}
 .hud .btn{animation:hudIn .4s var(--ease-out) .3s backwards}
 @keyframes hudIn{from{opacity:0;transform:translateY(6px)}}
-.hud .stat .label{font-size:11.5px;line-height:1.35}
-.hud .stat .value{font-size:20px;margin-top:2px;line-height:1.25}
-.hud .stat .note{font-size:12px;margin-top:1px;line-height:1.35}
+.hud .stat .label{font-size:11px;line-height:1.3}
+.hud .stat .value{font-size:18px;margin-top:2px;line-height:1.22}
+.hud .stat .note{font-size:11.5px;margin-top:1px;line-height:1.3}
 .hud .stat.featured{background:var(--orange)}
 .hud .btn{width:100%;justify-content:center;padding:10px 16px;font-size:14px}
 
@@ -330,9 +330,9 @@ footer.site{
 .drawer{
   position:fixed;left:50%;top:50%;
   transform:translate(-50%,-47%) scale(.97);opacity:0;visibility:hidden;
-  width:min(660px,calc(100% - 32px));max-height:86dvh;overflow-y:auto;
+  width:min(660px,calc(100% - 32px));max-height:90dvh;overflow-y:auto;
   background:var(--charcoal);border:1px solid var(--border);
-  border-radius:18px;padding:26px 26px 30px;z-index:50;
+  border-radius:18px;padding:22px 24px 24px;z-index:50;
   transition:transform .2s var(--ease-out),opacity .2s ease,visibility .2s; /* exit: fast */
 }
 .drawer.open{
@@ -347,7 +347,7 @@ footer.site{
 }
 .drawer .close::after{content:'';position:absolute;inset:-5px;border-radius:inherit} /* 44px hit area */
 .drawer .close:hover{border-color:var(--text-2)}
-.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
 .dgrid .full{grid-column:1/-1}
 .field{display:flex;flex-direction:column;gap:6px}
 .tin{
@@ -428,10 +428,10 @@ footer.site{
 /* market readout in drawer */
 .market{
   background:var(--ink);border:1px solid var(--border);border-radius:12px;
-  padding:16px 18px;margin-top:20px;display:none;
+  padding:13px 16px;margin-top:14px;display:none;
 }
 .market.show{display:block}
-.market .row{display:flex;justify-content:space-between;gap:14px;font-size:14px;padding:4px 0}
+.market .row{display:flex;justify-content:space-between;gap:14px;font-size:14px;padding:3px 0}
 .market .row span:first-child{color:var(--text-2)}
 .market .row b{font-weight:700}
 .market .verdict{font-size:13.5px;margin-top:8px;padding-top:10px;border-top:1px solid var(--border)}
@@ -439,7 +439,7 @@ footer.site{
 .market .verdict.low{color:var(--neg)}
 .market .verdict.mid{color:var(--text-2)}
 
-.dactions{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap}
+.dactions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
 .dactions .danger{color:var(--neg);border-color:var(--border)}
 .dactions .danger:hover{border-color:var(--neg)}
 
@@ -479,6 +479,7 @@ footer.site{
   .hud-gap{display:none}
   .hud .stat{background:var(--ink);border:1px solid var(--border)}
   .hud .stat:nth-child(6){grid-column:1/-1} /* odd tile spans the row */
+  .hud .stat:nth-child(7){grid-column:1/-1} /* contract spend mirrors recruitment cost width */
   .hud .stat.featured{background:var(--orange);border-color:var(--orange)}
   .hud .btn{display:none} /* download moves to the action row below the tiles */
   #clearBtn{display:none}
@@ -1705,8 +1706,8 @@ function syncMarket(){
     document.getElementById('cBench').textContent=fm(m.avg)+' / yr';
     if(draft.rate){
       var annualised=monthly*12, benchTrue=trueCost(m.avg);
-      if(annualised>benchTrue*1.15){v.className='verdict mid';v.textContent='At this day rate a full year would cost more than a permanent hire. Contracts suit short projects, not long-term seats.'}
-      else{v.className='verdict ok';v.textContent='Day-rate cost is calculated at '+CONTRACT_DAYS_PM+' working days a month, with no employer NI or pension.'}
+      if(annualised>benchTrue*1.15){v.className='verdict mid';v.textContent='Over a full year this day rate runs above a permanent salary, but with no employer NI, pension or payroll it stays a flexible cost you can stop any time. Best for projects and short-term cover.'}
+      else{v.className='verdict ok';v.textContent='Costed at '+CONTRACT_DAYS_PM+' working days a month, with no employer NI, pension or payroll. A contractor is a flexible business cost you can stop when the project ends.'}
     }else{
       v.className='verdict mid';v.textContent='Enter a day rate and length to price the contract.';
     }
