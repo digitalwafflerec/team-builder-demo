@@ -2011,6 +2011,25 @@ function init(){
   renderAll(true);
 }
 load();
+/* Deep-link pre-load: /team-builder?role=software-developer&region=birmingham
+   seeds a fresh plan with that role already costed. Salary pages link in this way. */
+function dwSlug(x){return String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
+function preloadFromURL(){
+  try{
+    var qs=new URLSearchParams(window.location.search||'');
+    var rRole=qs.get('role');if(!rRole)return;
+    var rs=dwSlug(rRole),roleIdx=-1,i;
+    for(i=0;i<ROLES.length;i++){if(dwSlug(ROLES[i].t)===rs){roleIdx=i;break;}}
+    if(roleIdx<0){for(i=0;i<ROLES.length;i++){var sj=dwSlug(ROLES[i].t);if(sj&&(sj.indexOf(rs)===0||rs.indexOf(sj)===0)){roleIdx=i;break;}}}
+    if(roleIdx<0)return;
+    var regId='Nationwide (UK)',rReg=qs.get('region');
+    if(rReg){var gs=dwSlug(rReg),k;for(k=0;k<REGIONS.length;k++){var R=REGIONS[k];if(dwSlug(String(R.id).replace(/^city:/,''))===gs||dwSlug(R.n)===gs){regId=R.id;break;}}}
+    uid=1;
+    var node={id:newId(),role:roleIdx,reg:regId,etype:'perm',status:'planned',q:null,children:[]};
+    state={company:'',defReg:regId,defRegSet:(regId!=='Nationwide (UK)'),nodes:[node]};
+  }catch(e){}
+}
+preloadFromURL();
 try{
   init();
 }catch(err){
